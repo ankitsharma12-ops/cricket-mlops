@@ -11,20 +11,20 @@ def load_features(path):
     df = pd.read_csv(path)
     X = df.drop(columns=['toss_win_match_win'])
     y = df['toss_win_match_win']
-    print(f"✅ Features loaded: {X.shape}")
+    print(f"Features loaded: {X.shape}")
     return X, y
 
 def train(X_train, y_train, params):
     model = RandomForestClassifier(**params)
     model.fit(X_train, y_train)
-    print(f"✅ Model trained!")
+    print(f"Model trained!")
     return model
 
 def save_model(model, path="models/model.pkl"):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         pickle.dump(model, f)
-    print(f"✅ Model saved to: {path}")
+    print(f"Model saved to: {path}")
 
 if __name__ == "__main__":
     # Config
@@ -49,7 +49,7 @@ if __name__ == "__main__":
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42
         )
-        print(f"✅ Train size: {X_train.shape} | Test size: {X_test.shape}")
+        print(f"Train size: {X_train.shape} | Test size: {X_test.shape}")
 
         # Train
         model = train(X_train, y_train, params)
@@ -68,6 +68,6 @@ if __name__ == "__main__":
         # Save model locally
         save_model(model, MODEL_PATH)
 
-        print(f"✅ Accuracy : {acc:.4f}")
-        print(f"✅ F1 Score : {f1:.4f}")
-        print(f"✅ MLflow Run ID: {mlflow.active_run().info.run_id}")
+        print(f"Accuracy : {acc:.4f}")
+        print(f"F1 Score : {f1:.4f}")
+        print(f"MLflow Run ID: {mlflow.active_run().info.run_id}")
