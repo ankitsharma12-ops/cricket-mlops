@@ -74,7 +74,7 @@ jobs:
 
       - name: Setup DVC and pull data
         run: |
-          uv run dvc remote add -d local_remote /tmp/dvc-storage
+          uv run dvc remote add -d -f local_remote /tmp/dvc-storage
           uv run dvc pull || echo "DVC pull skipped — using committed data"
 
       - name: Run data preparation
