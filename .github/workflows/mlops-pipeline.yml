@@ -1,0 +1,176 @@
+name: Cricket MLOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'data/**'
+
+jobs:
+
+  # ─────────────────────────────────────
+  # STAGE 1: CI — Code Quality Checks
+  # ─────────────────────────────────────
+  code-quality:
+    runs-on: ubuntu-latest
+    name: "Code Quality Checks"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Check Python syntax
+        run: |
+          uv run python -m py_compile src/data_prep.py
+          uv run python -m py_compile src/train.py
+          uv run python -m py_compile api/main.py
+          echo "All files syntax OK"
+
+      - name: Verify project structure
+        run: |
+          test -f src/data_prep.py  || exit 1
+          test -f src/train.py      || exit 1
+          test -f api/main.py       || exit 1
+          test -f Dockerfile        || exit 1
+          test -f docker-compose.yml|| exit 1
+          echo "Project structure OK"
+
+  # ─────────────────────────────────────
+  # STAGE 2: CI — Train & Quality Gate
+  # ─────────────────────────────────────
+  train-and-evaluate:
+    runs-on: ubuntu-latest
+    name: "Train Model & Quality Gate"
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Setup DVC and pull data
+        run: |
+          uv run dvc remote add -d local_remote /tmp/dvc-storage
+          uv run dvc pull || echo "DVC pull skipped — using committed data"
+
+      - name: Run data preparation
+        run: |
+          uv run python src/data_prep.py
+          echo "Data preparation complete"
+
+      - name: Train model
+        run: |
+          uv run python src/train.py
+          echo "Model training complete"
+
+      - name: Quality gate — check accuracy
+        run: |
+          uv run python -c "
+          import json, sys
+          with open('metrics.json') as f:
+              m = json.load(f)
+          acc = m['accuracy']
+          f1  = m['f1_score']
+          print(f'Accuracy : {acc}')
+          print(f'F1 Score : {f1}')
+          print(f'Run ID   : {m[\"run_id\"]}')
+          if acc < 0.52:
+              print('FAILED: Accuracy {acc} below threshold 0.52!')
+              sys.exit(1)
+          if f1 < 0.50:
+              print('FAILED: F1 {f1} below threshold 0.50!')
+              sys.exit(1)
+          print('PASSED: Quality gate cleared!')
+          "
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: trained-model
+          path: |
+            models/model.pkl
+            metrics.json
+
+  # ─────────────────────────────────────
+  # STAGE 3: CD — Build Docker Image
+  # ─────────────────────────────────────
+  build-docker:
+    runs-on: ubuntu-latest
+    name: "Build Docker Image"
+    needs: train-and-evaluate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download trained model
+        uses: actions/download-artifact@v3
+        with:
+          name: trained-model
+          path: models/
+
+      - name: Build Docker image
+        run: |
+          docker build -t cricket-mlops-api:latest .
+          echo "Docker image built successfully"
+
+      - name: Test API health check
+        run: |
+          docker run -d \
+            --name cricket-api \
+            -p 8000:8000 \
+            -v $(pwd)/models:/app/models \
+            -v $(pwd)/data:/app/data \
+            cricket-mlops-api:latest
+          sleep 15
+          curl -f http://localhost:8000/health
+          echo "Health check passed!"
+          docker stop cricket-api
+
+      - name: Test predict endpoint
+        run: |
+          docker run -d \
+            --name cricket-api-test \
+            -p 8001:8000 \
+            -v $(pwd)/models:/app/models \
+            -v $(pwd)/data:/app/data \
+            cricket-mlops-api:latest
+          sleep 15
+          curl -f -X POST http://localhost:8001/predict \
+            -H "Content-Type: application/json" \
+            -d '{"team1":7,"team2":0,"venue":55,"toss_winner":7,"toss_decision":0}'
+          echo "Predict endpoint test passed!"
+          docker stop cricket-api-test
+
+      - name: Show pipeline summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Cricket MLOps Pipeline Summary  "
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          cat metrics.json
+          echo "Docker image: cricket-mlops-api:latest"
+          echo "Status: READY FOR DEPLOYMENT"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

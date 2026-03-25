@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
     # Hyperparameters
     params = {
-        "n_estimators": 250,
-        "max_depth": 20,
+        "n_estimators": 68,
+        "max_depth": 5,
         "random_state": 42
     }
 
@@ -67,6 +67,17 @@ if __name__ == "__main__":
 
         # Save model locally
         save_model(model, MODEL_PATH)
+        
+        # Save metrics for CI/CD quality gate
+        import json
+        metrics = {
+            "accuracy": round(float(acc), 4),
+            "f1_score": round(float(f1), 4),
+            "run_id":   mlflow.active_run().info.run_id
+        }
+        with open("metrics.json", "w") as f:
+            json.dump(metrics, f, indent=2)
+        print(f"Metrics saved to metrics.json")
 
         print(f"Accuracy : {acc:.4f}")
         print(f"F1 Score : {f1:.4f}")
