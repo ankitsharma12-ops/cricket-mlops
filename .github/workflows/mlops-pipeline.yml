@@ -78,14 +78,18 @@ jobs:
           uv run dvc pull || echo "DVC pull skipped — using committed data"
 
       - name: Run data preparation
+        env:
+          MLFLOW_TRACKING_URI: file:///home/runner/work/cricket-mlops/cricket-mlops/mlruns
         run: |
           uv run python src/data_prep.py
-          echo "Data preparation complete"
+          echo "✅ Data preparation complete"
 
       - name: Train model
+        env:
+          MLFLOW_TRACKING_URI: file:///home/runner/work/cricket-mlops/cricket-mlops/mlruns
         run: |
           uv run python src/train.py
-          echo "Model training complete"
+          echo "✅ Model training complete"
 
       - name: Quality gate — check accuracy
         run: |
