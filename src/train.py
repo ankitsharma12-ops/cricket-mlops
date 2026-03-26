@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
     # Hyperparameters
     params = {
-        "n_estimators": 68,
-        "max_depth": 5,
+        "n_estimators": 120,
+        "max_depth": 7,
         "random_state": 42
     }
 
